@@ -1,0 +1,27 @@
+# R
+.Rproj.user
+.Rhistory
+.Rdata
+.httr-oauth
+.DS_Store
+*.Rproj
+
+# Shiny
+rsconnect/
+
+# Test artifacts
+tests/testthat/_snaps/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Generated files (not the demo)
+test_output_*.R
+test_report_*.csv
+test_smoke.R
+test_tsa.R

@@ -1,0 +1,355 @@
+# =============================================================================
+# Excel2R — Convert Excel formulas to executable R code
+# Shiny Web Application
+# =============================================================================
+
+library(shiny)
+library(bslib)
+library(DT)
+
+# Increase upload limit to 50MB
+options(shiny.maxRequestSize = 50 * 1024^2)
+
+# =============================================================================
+# UI
+# =============================================================================
+ui <- page_navbar(
+  title = "Excel2R",
+  theme = bs_theme(
+    version = 5,
+    bootswatch = "flatly",
+    primary = "#2C3E50"
+  ),
+
+  # --- Tab 1: Upload ---
+  nav_panel(
+    title = "1. Upload",
+    icon = icon("upload"),
+    layout_columns(
+      col_widths = c(4, 8),
+      card(
+        card_header("Upload Excel File"),
+        fileInput("upload", NULL,
+                  accept = c(".xlsx", ".xls"),
+                  placeholder = "Choose .xlsx file..."),
+        hr(),
+        htmlOutput("upload_status")
+      ),
+      card(
+        card_header("Summary"),
+        conditionalPanel(
+          condition = "output.has_results",
+          layout_columns(
+            col_widths = c(3, 3, 3, 3),
+            value_box(
+              title = "Sheets",
+              value = textOutput("n_sheets"),
+              showcase = icon("table"),
+              theme = "primary"
+            ),
+            value_box(
+              title = "Formulas",
+              value = textOutput("n_formulas"),
+              showcase = icon("calculator"),
+              theme = "info"
+            ),
+            value_box(
+              title = "OK",
+              value = textOutput("n_ok"),
+              showcase = icon("check"),
+              theme = "success"
+            ),
+            value_box(
+              title = "Warnings",
+              value = textOutput("n_warnings"),
+              showcase = icon("exclamation-triangle"),
+              theme = "warning"
+            )
+          ),
+          hr(),
+          h6("Functions Detected:"),
+          htmlOutput("detected_functions")
+        )
+      )
+    )
+  ),
+
+  # --- Tab 2: Review ---
+  nav_panel(
+    title = "2. Review",
+    icon = icon("search"),
+    card(
+      card_header(
+        class = "d-flex justify-content-between align-items-center",
+        "Formula Transformation Results",
+        div(
+          class = "d-flex gap-2",
+          selectInput("filter_sheet", "Sheet:", choices = c("All"), width = "200px"),
+          selectInput("filter_status", "Status:", choices = c("All", "ok", "warning", "error"), width = "120px")
+        )
+      ),
+      DTOutput("formula_table")
+    )
+  ),
+
+  # --- Tab 3: Configure ---
+  nav_panel(
+    title = "3. Configure",
+    icon = icon("cog"),
+    layout_columns(
+      col_widths = c(6, 6),
+      card(
+        card_header("Output Options"),
+        checkboxInput("opt_trycatch", "Wrap each formula in tryCatch() for error safety", value = TRUE),
+        checkboxInput("opt_comments", "Include original Excel formulas as comments", value = TRUE),
+        textInput("opt_filepath", "Excel file path in generated script:",
+                  value = "", placeholder = "e.g., data/my_workbook.xlsx")
+      ),
+      card(
+        card_header("Sheet Selection"),
+        htmlOutput("sheet_checkboxes"),
+        actionButton("select_all", "Select All", class = "btn-sm btn-outline-primary me-2"),
+        actionButton("deselect_all", "Deselect All", class = "btn-sm btn-outline-secondary")
+      )
+    )
+  ),
+
+  # --- Tab 4: Download ---
+  nav_panel(
+    title = "4. Download",
+    icon = icon("download"),
+    layout_columns(
+      col_widths = c(8, 4),
+      card(
+        card_header("Generated R Script Preview"),
+        verbatimTextOutput("script_preview", placeholder = TRUE)
+      ),
+      card(
+        card_header("Downloads"),
+        downloadButton("download_script", "Download .R Script", class = "btn-primary w-100 mb-3"),
+        downloadButton("download_report", "Download Report (.csv)", class = "btn-outline-primary w-100 mb-3"),
+        hr(),
+        htmlOutput("download_stats")
+      )
+    )
+  )
+)
+
+# =============================================================================
+# Server
+# =============================================================================
+server <- function(input, output, session) {
+
+  # Reactive values
+  rv <- reactiveValues(
+    results = NULL,    # output of process_excel_file()
+    file_path = NULL,
+    processing = FALSE
+  )
+
+  # --- File Upload Handler ---
+  observeEvent(input$upload, {
+    req(input$upload)
+
+    rv$processing <- TRUE
+
+    file_path <- input$upload$datapath
+    rv$file_path <- file_path
+
+    withProgress(message = "Processing Excel file...", value = 0, {
+      progress_fn <- function(step, detail) {
+        incProgress(1/6, detail = detail)
+      }
+
+      tryCatch({
+        result <- process_excel_file(
+          file_path = file_path,
+          sheet_names = NULL,  # auto-detect all
+          wrap_trycatch = TRUE,
+          include_comments = TRUE,
+          excel_path_in_script = input$upload$name,
+          progress_callback = progress_fn
+        )
+        rv$results <- result
+      }, error = function(e) {
+        showNotification(paste("Error:", e$message), type = "error", duration = 10)
+        rv$results <- NULL
+      })
+    })
+
+    rv$processing <- FALSE
+
+    # Update sheet filter
+    if (!is.null(rv$results) && nrow(rv$results$report) > 0) {
+      sheets <- unique(rv$results$report$Sheet)
+      updateSelectInput(session, "filter_sheet", choices = c("All", sheets))
+    }
+  })
+
+  # --- Output: has_results flag ---
+  output$has_results <- reactive({ !is.null(rv$results) })
+  outputOptions(output, "has_results", suspendWhenHidden = FALSE)
+
+  # --- Summary Cards ---
+  output$n_sheets <- renderText({
+    req(rv$results)
+    length(unique(rv$results$report$Sheet))
+  })
+
+  output$n_formulas <- renderText({
+    req(rv$results)
+    nrow(rv$results$report)
+  })
+
+  output$n_ok <- renderText({
+    req(rv$results)
+    sum(rv$results$report$Status == "ok")
+  })
+
+  output$n_warnings <- renderText({
+    req(rv$results)
+    sum(rv$results$report$Status != "ok")
+  })
+
+  output$upload_status <- renderUI({
+    if (rv$processing) {
+      tags$div(class = "text-info", icon("spinner", class = "fa-spin"), " Processing...")
+    } else if (!is.null(rv$results)) {
+      tags$div(class = "text-success", icon("check-circle"), " File processed successfully!")
+    } else {
+      tags$div(class = "text-muted", "Upload an .xlsx file to begin")
+    }
+  })
+
+  output$detected_functions <- renderUI({
+    req(rv$results)
+    funcs <- detect_used_functions(rv$results$report[, c("Sheet", "Cell", "Row", "Col", "Formula")])
+    if (length(funcs) == 0) return(tags$em("No Excel functions detected"))
+
+    tags$div(
+      lapply(names(funcs), function(fn) {
+        supported <- is_function_supported(fn)
+        badge_class <- if (supported) "bg-success" else "bg-danger"
+        tags$span(class = paste("badge", badge_class, "me-1 mb-1"),
+                  paste0(fn, " (", funcs[fn], ")"))
+      })
+    )
+  })
+
+  # --- Review Table ---
+  output$formula_table <- renderDT({
+    req(rv$results)
+    df <- rv$results$report[, c("Sheet", "Cell", "Formula", "R_Code", "Status", "Sheet_Order", "Cell_Order")]
+
+    if (input$filter_sheet != "All") {
+      df <- df[df$Sheet == input$filter_sheet, ]
+    }
+    if (input$filter_status != "All") {
+      df <- df[df$Status == input$filter_status, ]
+    }
+
+    datatable(
+      df,
+      options = list(
+        pageLength = 25,
+        scrollX = TRUE,
+        columnDefs = list(
+          list(width = "120px", targets = c(0, 1)),
+          list(width = "300px", targets = c(2, 3))
+        )
+      ),
+      rownames = FALSE,
+      filter = "top"
+    ) |>
+      formatStyle("Status",
+                   backgroundColor = styleEqual(
+                     c("ok", "warning", "error"),
+                     c("#d4edda", "#fff3cd", "#f8d7da")
+                   ))
+  })
+
+  # --- Sheet Checkboxes ---
+  output$sheet_checkboxes <- renderUI({
+    req(rv$results)
+    sheets <- unique(rv$results$report$Sheet)
+    checkboxGroupInput("selected_sheets", NULL, choices = sheets, selected = sheets)
+  })
+
+  observeEvent(input$select_all, {
+    req(rv$results)
+    sheets <- unique(rv$results$report$Sheet)
+    updateCheckboxGroupInput(session, "selected_sheets", selected = sheets)
+  })
+
+  observeEvent(input$deselect_all, {
+    updateCheckboxGroupInput(session, "selected_sheets", selected = character(0))
+  })
+
+  # --- Regenerate script reactively when config changes ---
+  generated_script <- reactive({
+    req(rv$results, rv$file_path)
+
+    # Determine which sheets to include
+    selected <- if (!is.null(input$selected_sheets)) input$selected_sheets else unique(rv$results$report$Sheet)
+
+    excel_path <- if (nchar(input$opt_filepath) > 0) input$opt_filepath else input$upload$name
+
+    process_excel_file(
+      file_path = rv$file_path,
+      sheet_names = selected,
+      wrap_trycatch = input$opt_trycatch,
+      include_comments = input$opt_comments,
+      excel_path_in_script = excel_path
+    )
+  })
+
+  # --- Script Preview ---
+  output$script_preview <- renderText({
+    req(generated_script())
+    script <- generated_script()$script
+    # Show first 100 lines
+    lines <- strsplit(script, "\n")[[1]]
+    if (length(lines) > 100) {
+      paste(c(lines[1:100], "", sprintf("# ... (%d more lines)", length(lines) - 100)), collapse = "\n")
+    } else {
+      script
+    }
+  })
+
+  output$download_stats <- renderUI({
+    req(generated_script())
+    script <- generated_script()$script
+    n_lines <- length(strsplit(script, "\n")[[1]])
+    size_kb <- round(nchar(script) / 1024, 1)
+    tags$div(
+      tags$p(icon("file-code"), sprintf(" %d lines", n_lines)),
+      tags$p(icon("weight-hanging"), sprintf(" %.1f KB", size_kb))
+    )
+  })
+
+  # --- Downloads ---
+  output$download_script <- downloadHandler(
+    filename = function() {
+      name <- tools::file_path_sans_ext(input$upload$name)
+      paste0(name, "_generated.R")
+    },
+    content = function(file) {
+      writeLines(generated_script()$script, file)
+    }
+  )
+
+  output$download_report <- downloadHandler(
+    filename = function() {
+      name <- tools::file_path_sans_ext(input$upload$name)
+      paste0(name, "_report.csv")
+    },
+    content = function(file) {
+      write.csv(generated_script()$report, file, row.names = FALSE)
+    }
+  )
+}
+
+# =============================================================================
+# Run
+# =============================================================================
+shinyApp(ui = ui, server = server)
