@@ -443,7 +443,8 @@ server <- function(input, output, session) {
         on.exit(unlink(tmp_dir, recursive = TRUE), add = TRUE)
 
         sheets <- unique(result$report$Sheet)
-        export_sheet_csvs(rv$file_path, sheets, data_dir)
+        export_sheet_csvs(rv$file_path, sheets, data_dir,
+                          formula_data = result$report)
 
         writeLines(result$script, file.path(project_dir, "generated_script.R"))
 

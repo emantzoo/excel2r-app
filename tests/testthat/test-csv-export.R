@@ -10,7 +10,7 @@ find_demo_file <- function() {
   if (file.exists(f)) f else NULL
 }
 
-# --- export_sheet_csvs ---
+# --- export_sheet_csvs (unfiltered, backward compat) ---
 
 test_that("export_sheet_csvs creates tidy CSV files", {
   demo_file <- find_demo_file()
@@ -56,6 +56,106 @@ test_that("tidy CSV excludes formula cells", {
         info = sprintf("Formula cell %s!%s%d should not be in CSV",
                        s, col_letter, fc$row))
     }
+  }
+})
+
+# --- extract_referenced_cells ---
+
+test_that("extract_referenced_cells finds same-sheet and cross-sheet refs", {
+  formula_data <- data.frame(
+    Sheet = c("Summary", "Summary", "Detail"),
+    Cell = c("A1", "B1", "C1"),
+    Row = c(1L, 1L, 1L),
+    Col = c(1L, 2L, 3L),
+    Formula = c(
+      "'Detail'!A1+B2",
+      "SUM('Detail'!A1:A10)",
+      "D5"
+    ),
+    stringsAsFactors = FALSE
+  )
+
+  sheet_names <- c("Summary", "Detail")
+  sheet_dims <- list(
+    Summary = list(max_row = 10, max_col = 5, min_col = 1),
+    Detail = list(max_row = 20, max_col = 10, min_col = 1)
+  )
+
+  refs <- extract_referenced_cells(formula_data, sheet_names, sheet_dims)
+
+  # Detail should have A1 through A10 (from range) and D5 (single ref)
+  expect_true("A1" %in% refs[["Detail"]]$cells)
+  expect_true("A5" %in% refs[["Detail"]]$cells)
+  expect_true("A10" %in% refs[["Detail"]]$cells)
+  expect_true("D5" %in% refs[["Detail"]]$cells)
+
+  # Summary should have B2 (same-sheet ref from first formula)
+  expect_true("B2" %in% refs[["Summary"]]$cells)
+})
+
+test_that("extract_referenced_cells handles whole-column refs", {
+  formula_data <- data.frame(
+    Sheet = "Sheet1",
+    Cell = "A1",
+    Row = 1L,
+    Col = 1L,
+    Formula = "SUM(B:B)",
+    stringsAsFactors = FALSE
+  )
+
+  sheet_dims <- list(Sheet1 = list(max_row = 5, max_col = 3, min_col = 1))
+  refs <- extract_referenced_cells(formula_data, "Sheet1", sheet_dims)
+
+  # Whole-column refs are tracked as column letters, not expanded to cells
+  expect_true("B" %in% refs[["Sheet1"]]$whole_cols)
+  expect_equal(length(refs[["Sheet1"]]$cells), 0)
+})
+
+test_that("extract_referenced_cells ignores string literals", {
+  formula_data <- data.frame(
+    Sheet = "Sheet1",
+    Cell = "A1",
+    Row = 1L,
+    Col = 1L,
+    Formula = 'IF(B1="A2",C3,D4)',
+    stringsAsFactors = FALSE
+  )
+
+  refs <- extract_referenced_cells(formula_data, "Sheet1", NULL)
+
+  # B1, C3, D4 should be referenced; "A2" is a string literal, not a ref
+  expect_true("B1" %in% refs[["Sheet1"]]$cells)
+  expect_true("C3" %in% refs[["Sheet1"]]$cells)
+  expect_true("D4" %in% refs[["Sheet1"]]$cells)
+  expect_false("A2" %in% refs[["Sheet1"]]$cells)
+})
+
+# --- filtered export ---
+
+test_that("filtered export has fewer or equal rows vs unfiltered", {
+  demo_file <- find_demo_file()
+  skip_if(is.null(demo_file), "Demo workbook not found")
+
+  tmp_all <- file.path(tempdir(), "test_all_cells")
+  tmp_filt <- file.path(tempdir(), "test_filtered_cells")
+  on.exit({
+    unlink(tmp_all, recursive = TRUE)
+    unlink(tmp_filt, recursive = TRUE)
+  }, add = TRUE)
+
+  sheets <- readxl::excel_sheets(demo_file)
+  paths_all <- export_sheet_csvs(demo_file, sheets, tmp_all)
+
+  result <- process_excel_file(file_path = demo_file, data_source = "csv")
+  paths_filt <- export_sheet_csvs(demo_file, sheets, tmp_filt,
+                                   formula_data = result$report)
+
+  for (s in sheets) {
+    csv_all <- read.csv(paths_all[s], stringsAsFactors = FALSE)
+    csv_filt <- read.csv(paths_filt[s], stringsAsFactors = FALSE)
+    expect_true(nrow(csv_filt) <= nrow(csv_all),
+      info = sprintf("Sheet %s: filtered (%d) should be <= all (%d)",
+                     s, nrow(csv_filt), nrow(csv_all)))
   }
 })
 
@@ -128,7 +228,9 @@ test_that("reconstruct_grid rebuilds grid correctly", {
   expect_true(is.na(grid$A[3]))
 })
 
-test_that("CSV mode end-to-end: export + run script", {
+# --- End-to-end (with filtered export) ---
+
+test_that("CSV mode end-to-end: filtered export + run script", {
   demo_file <- find_demo_file()
   skip_if(is.null(demo_file), "Demo workbook not found")
 
@@ -143,7 +245,7 @@ test_that("CSV mode end-to-end: export + run script", {
   )
 
   sheets <- unique(result$report$Sheet)
-  export_sheet_csvs(demo_file, sheets, data_dir)
+  export_sheet_csvs(demo_file, sheets, data_dir, formula_data = result$report)
 
   script_path <- file.path(tmp_dir, "generated_script.R")
   writeLines(result$script, script_path)

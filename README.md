@@ -1,8 +1,8 @@
 # excel2r
 
-**Convert Excel formulas to executable R code.**
+**Migrate your entire Excel workbook to R — data and logic — in one step.**
 
-Upload any multi-tab `.xlsx` workbook and get a standalone `.R` script that recreates its formula logic — including cross-sheet references, conditional aggregation (SUMIFS, COUNTIFS), nested functions, and named table detection.
+Upload any multi-tab `.xlsx` workbook and get a fully standalone package: tidy CSV data files and an R script (base R only, zero dependencies) that recreates every formula without needing Excel at runtime. Edit the CSVs, rerun the script, get updated results. Built-in verification compares every computed value against Excel's cached results before you commit to the migration.
 
 [![Excel2R](https://img.shields.io/badge/R-Shiny-blue)](https://img.shields.io/badge/R-Shiny-blue) [![License](https://img.shields.io/badge/license-MIT-green)](https://img.shields.io/badge/license-MIT-green)
 
@@ -12,7 +12,9 @@ Upload any multi-tab `.xlsx` workbook and get a standalone `.R` script that recr
 - Extract every formula from your workbook and translate it to equivalent R code
 - Resolve cross-sheet references and determine the correct execution order (topological sort)
 - Detect named tables (ListObjects) and generate properly named R data frames with real column headers
-- Produce a self-contained `.R` script that loads your Excel data and runs all calculations in R
+- Export raw data as tidy CSVs — one per sheet, formula cells excluded — so the Excel file is no longer needed
+- Verify computed R values against Excel's cached formula results, classifying matches, precision diffs, and real mismatches
+- Produce a self-contained `.R` script using only base R — zero packages to install
 - Flag unsupported functions clearly so nothing is silently skipped
 
 **It doesn't:**
@@ -21,28 +23,64 @@ Upload any multi-tab `.xlsx` workbook and get a standalone `.R` script that recr
 - Handle dynamic references (`INDIRECT`, `OFFSET`), array formulas, or structured table references (`Table1[Column]`)
 
 **Use it when you want to:**
-- **Migrate** an Excel-based workflow into R so you can extend, automate, or version-control it
-- **Audit** complex workbooks by reading every formula as plain R, line by line
-- **Reproduce** calculations in a scripted pipeline instead of opening Excel
-- **Document** what a workbook actually computes, for handover or review
+- **Migrate** — move an Excel-based workflow entirely into R, no Excel dependency at runtime
+- **Automate** — plug formula logic into a pipeline, schedule it, chain it with other scripts
+- **Verify** — confirm the R translation produces the same results as Excel before committing
+- **Audit** — read every formula as plain R, line by line, in version-controllable code
+- **Iterate** — edit input values in CSV, rerun the script, get updated results
+
+## Two Output Modes
+
+### Excel mode (default)
+Generated script reads from the `.xlsx` file at runtime. You still need the Excel file.
+
+### CSV standalone mode
+Download a `.zip` containing:
+```
+excel2r_output/
+├── generated_script.R    ← base R only, zero dependencies
+├── data/
+│   ├── Products.csv      ← tidy format: row, col, value
+│   ├── Q1_Sales.csv
+│   └── ...
+└── README.txt
+```
+Delete the Excel file. Edit the CSVs to change inputs. Rerun the script. Done.
 
 ## Generated Output Explained
 
-The `.R` script the tool produces is not a black box. Here's what each section does:
+### 1. Data — tidy CSV per sheet
 
-### 1. Load data — each sheet becomes an R data frame
+Each CSV contains only hardcoded (non-formula) cells in a compact long format:
 
-```r
-Products <- as.data.frame(openxlsx2::read_xlsx(
-  excel_file, sheet = "Products",
-  rows = 1:25, skip_empty_rows = FALSE, col_names = FALSE
-))
-colnames(Products) <- c("A", "B", "C", "D", "E")
+```
+row,col,value
+1,A,Company Report
+3,B,Revenue
+3,C,Q1
+4,B,North
+4,C,150
+5,B,South
+5,C,80
+7,B,Total
 ```
 
-Column names match Excel (A, B, C, ...) and row indices match Excel row numbers, so `Products$D[10]` in R is cell D10 in Excel.
+No empty cells, no formula cells. Just the raw inputs that feed into the formulas.
 
-### 2. Named tables — real column names for downstream use
+### 2. Grid reconstruction — CSV becomes a data frame
+
+The generated script rebuilds the Excel grid from the tidy CSV using an embedded helper:
+
+```r
+Products <- reconstruct_grid(
+  file.path(data_dir, "Products.csv"),
+  max_row = 8, max_col = 4
+)
+```
+
+After reconstruction, `Products$C[4]` is `150` — same position as cell C4 in Excel.
+
+### 3. Named tables — real column names for downstream use
 
 When the workbook contains named tables (Insert → Table in Excel), the script generates additional data frames with proper headers:
 
@@ -52,54 +90,46 @@ SalesData <- Products[2:151, 1:5]
 colnames(SalesData) <- c("Product", "Category", "Price", "Quantity", "Revenue")
 ```
 
-The positional frames (`Products$A[10]`) are kept for formula execution. The named table frames (`SalesData$Revenue`) are for your downstream analysis — ready to use with dplyr, ggplot2, or any R workflow.
-
-### 3. Execute formulas — in dependency order
+### 4. Formulas — executed in dependency order
 
 Each formula is translated and wrapped in error handling:
 
 ```r
-# D10 = SUM(D3:D9)
-Products$D[10] <- tryCatch(
-  sum(Products$D[3:9], na.rm=TRUE),
-  error = function(e) { message('Error in Products!D10: ', e$message); NA }
-)
-
-# E5 = IF(D5>1000, D5*0.1, 0)
-Products$E[5] <- tryCatch(
-  ifelse(Products$D[5]>1000, Products$D[5]*0.1, 0),
-  error = function(e) { message('Error in Products!E5: ', e$message); NA }
-)
-
-# Annual_Summary!B3 = 'Q1 Sales'!F20
-Annual_Summary$B[3] <- tryCatch(
-  Q1_Sales$F[20],
-  error = function(e) { message('Error in Annual Summary!B3: ', e$message); NA }
+# C7 = SUM(C4:C5)
+Products$C[7] <- tryCatch(
+  sum(Products$C[4:5], na.rm=TRUE),
+  error = function(e) { message('Error in Products!C7: ', e$message); NA }
 )
 ```
 
-Cross-sheet references are resolved automatically. Execution order is determined by Kahn's topological sort so dependencies are always computed first.
+Cross-sheet references are resolved automatically. Execution order is determined by Kahn's topological sort.
 
-### 4. Verify — check what was created
+### 5. Verify — compare R results against Excel
 
-```r
-cat("\n=== Script execution complete ===\n")
-cat("Data frames created:\n")
-cat(sprintf("  Products: %d rows x %d cols\n", nrow(Products), ncol(Products)))
-cat(sprintf("  Q1_Sales: %d rows x %d cols\n", nrow(Q1_Sales), ncol(Q1_Sales)))
-cat(sprintf("  SalesData (table): %d rows x %d cols\n", nrow(SalesData), ncol(SalesData)))
+The Verify tab runs the generated script and compares every computed value against Excel's cached formula results:
+
+- **Exact matches** — R and Excel agree
+- **Precision diffs** — minor floating-point differences (< 0.0001), classified as harmless
+- **NA/error diffs** — Excel errors (#VALUE!, #REF!) or uncached formulas, classified as harmless
+- **Real mismatches** — values that genuinely differ, shown with the formula, R value, Excel value, and difference
+
+### 6. Iterate — change inputs, rerun
+
+Change North Q1 revenue from 150 to 300 in the CSV:
 ```
-
-After running the script, you have R data frames containing the same calculated values as your Excel workbook — ready for further analysis, plotting, or piping into other workflows.
+4,"C","300"
+```
+Rerun the script. Totals update. No Excel involved.
 
 ## Features
 
 - **62 Excel functions** mapped to R equivalents (SUM, IF, VLOOKUP, SUMIFS, INDEX/MATCH, and more)
+- **CSV standalone mode** — export data as tidy CSVs, generated script uses base R only, zero dependencies
+- **Built-in verification** — run the script and compare every result against Excel's cached values
 - **Named table detection** — Excel ListObjects become properly named R data frames with real column headers
 - **Auto-detects** all sheets and their actual dimensions
 - **Cross-sheet references** resolved with dependency-ordered execution (Kahn's topological sort)
 - **Balanced-parenthesis parser** handles nested functions like `SUM(IF(A1>0,B1,0))`
-- **Downloadable .R script** — self-contained and runnable standalone
 - **Interactive review** of every formula transformation before download
 - **Unsupported functions** clearly flagged (not silently skipped)
 
@@ -110,9 +140,9 @@ install.packages(c("shiny", "bslib", "DT", "tidyxl", "openxlsx2", "readxl"))
 shiny::runApp("path/to/excel2r-app")
 ```
 
-Upload an Excel file in the browser and follow the 4-step workflow:
+Upload an Excel file and follow the 5-step workflow:
 
-**Upload** → **Review** formulas → **Configure** options → **Download** .R script
+**Upload** → **Review** formulas → **Configure** options → **Download** .R script or .zip → **Verify** against Excel
 
 ## Demo
 
@@ -177,28 +207,33 @@ Upload .xlsx
 4. Determine execution order (Kahn's topological sort)
     │
     ▼
-5. Generate self-contained .R script (with named table data frames)
+5. Generate output:
+   ├── Excel mode: .R script (reads .xlsx at runtime)
+   └── CSV mode: .zip with .R script + tidy CSVs (standalone)
     │
     ▼
-Download
+6. Verify: run script, compare R values vs Excel cached results
 ```
 
 ## Project Structure
 
 ```
 excel2r-app/
-├── app.R                        # Shiny app
+├── app.R                        # Shiny app (5-tab workflow)
 ├── R/                           # Core modules
 │   ├── utils.R                  # Shared utilities
 │   ├── extract_formulas.R       # Formula extraction via tidyxl
 │   ├── detect_tables.R          # Named table detection via openxlsx2
+│   ├── export_csv.R             # Tidy CSV export for standalone mode
 │   ├── parse_formula.R          # Balanced-paren tokenizer
 │   ├── transform_references.R   # Cell/range → R syntax
 │   ├── transform_functions.R    # 62 Excel functions → R
 │   ├── dependency_order.R       # Kahn's topological sort
-│   └── generate_script.R        # Script assembler
-├── tests/testthat/              # 150+ unit & integration tests
-├── inst/demo/                   # Demo Excel workbook
+│   ├── generate_script.R        # Script assembler (Excel + CSV modes)
+│   └── verify_values.R          # R vs Excel value comparison
+├── tests/testthat/              # Unit & integration tests
+├── inst/demo/                   # Demo Excel workbooks
+├── Dockerfile                   # Cloud Run deployment
 └── run_tests.R                  # Test runner
 ```
 
@@ -209,13 +244,15 @@ setwd("path/to/excel2r-app")
 source("run_tests.R")
 ```
 
-Covers unit tests for each module, integration tests against the demo workbook, and shinytest2 tests for the UI.
+Covers unit tests for each module (parser, transforms, dependency ordering, CSV export, verification), integration tests against the demo workbook, and shinytest2 tests for the UI.
 
 ## Dependencies
 
 **App:** shiny, bslib, DT, tidyxl, openxlsx2, readxl
 
-**Generated scripts use:** openxlsx2 only — conditional aggregation helpers (SUMIFS, COUNTIF, etc.) are embedded directly in the output script with no external dependencies.
+**Generated scripts (Excel mode):** openxlsx2
+
+**Generated scripts (CSV mode):** none — base R only
 
 ## Future Work
 
