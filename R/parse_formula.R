@@ -142,14 +142,14 @@ extract_ranges <- function(formula) {
         # Allow sheet!ref — include the sheet prefix
         if (char == "!") {
           if (left_pos > 1 && substr(formula, left_pos - 1, left_pos - 1) == "'") {
-            # Part of 'Sheet Name'! — scan further left to include the quoted sheet
-            left_pos <- left_pos - 1
-            # Now find the opening quote
+            # Part of 'Sheet Name'! — scan left past closing quote to find opening quote
+            left_pos <- left_pos - 2  # skip past the closing quote
             while (left_pos > 1 && substr(formula, left_pos, left_pos) != "'") {
               left_pos <- left_pos - 1
             }
-            # left_pos is now at the opening quote
-            next
+            # left_pos is now at the opening quote — stop scanning
+            left_pos <- left_pos - 1
+            break
           }
           # Unquoted sheet ref like Sheet1!A1:B10 — continue scanning left
           left_pos <- left_pos - 1
