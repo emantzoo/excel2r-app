@@ -1,0 +1,6 @@
+tests/
+run_tests.R
+.git/
+.gitignore
+*.md
+LICENSE
