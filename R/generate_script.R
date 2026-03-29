@@ -152,13 +152,6 @@ generate_r_script <- function(excel_path, formula_data, sheet_names, sheet_dims,
   add("# --- Required Packages ---")
   add('if (!requireNamespace("openxlsx2", quietly = TRUE)) install.packages("openxlsx2")')
 
-  # Check if conditional aggregation functions are used
-  cond_agg_funcs <- c("SUMIF", "SUMIFS", "COUNTIF", "COUNTIFS", "AVERAGEIF", "AVERAGEIFS")
-  uses_cond_agg <- any(toupper(names(used_functions)) %in% cond_agg_funcs)
-  if (uses_cond_agg) {
-    add('if (!requireNamespace("ExcelFunctionsR", quietly = TRUE)) install.packages("ExcelFunctionsR")')
-  }
-
   # Check if IFS/case_when is used
   uses_ifs <- any(grepl("dplyr::case_when", formula_data$R_Code, fixed = TRUE))
   if (uses_ifs) {
@@ -167,7 +160,6 @@ generate_r_script <- function(excel_path, formula_data, sheet_names, sheet_dims,
 
   blank()
   add("library(openxlsx2)")
-  if (uses_cond_agg) add("library(ExcelFunctionsR)")
   if (uses_ifs) add("library(dplyr)")
   blank()
 
@@ -310,6 +302,124 @@ generate_r_script <- function(excel_path, formula_data, sheet_names, sheet_dims,
     add("excel_rounddown <- function(x, digits = 0) {")
     add("  mult <- 10^digits")
     add("  floor(x * mult) / mult")
+    add("}")
+    blank()
+  }
+
+  # Conditional aggregation helpers (based on Excel operator parsing)
+  # Shared criteria parser needed by SUMIF/SUMIFS/COUNTIF/COUNTIFS/AVERAGEIF/AVERAGEIFS
+  cond_agg_funcs <- c("SUMIF", "SUMIFS", "COUNTIF", "COUNTIFS", "AVERAGEIF", "AVERAGEIFS")
+  uses_cond_agg <- any(toupper(names(used_functions)) %in% cond_agg_funcs)
+
+  if (uses_cond_agg) {
+    add("# Parse Excel criteria string into operator + value")
+    add("# Handles: \">=10\", \">5\", \"<>0\", \"YES\", 42, etc.")
+    add(".parse_criterion <- function(crit) {")
+    add("  if (is.numeric(crit)) return(list(op = '==', val = crit))")
+    add("  if (is.logical(crit) && isTRUE(crit)) return(list(op = 'TRUE', val = TRUE))")
+    add("  s <- as.character(crit)")
+    add("  if (grepl('^<>', s)) return(list(op = '!=', val = type.convert(sub('^<>', '', s), as.is = TRUE)))")
+    add("  if (grepl('^>=', s)) return(list(op = '>=', val = as.numeric(sub('^>=', '', s))))")
+    add("  if (grepl('^<=', s)) return(list(op = '<=', val = as.numeric(sub('^<=', '', s))))")
+    add("  if (grepl('^>', s))  return(list(op = '>',  val = as.numeric(sub('^>', '', s))))")
+    add("  if (grepl('^<', s))  return(list(op = '<',  val = as.numeric(sub('^<', '', s))))")
+    add("  # Plain value — try numeric first")
+    add("  num <- suppressWarnings(as.numeric(s))")
+    add("  if (!is.na(num)) return(list(op = '==', val = num))")
+    add("  list(op = '==', val = s)")
+    add("}")
+    blank()
+
+    add("# Apply a parsed criterion to a range, returns logical vector")
+    add(".apply_criterion <- function(range_vec, parsed) {")
+    add("  if (identical(parsed$op, 'TRUE')) return(rep(TRUE, length(range_vec)))")
+    add("  get(parsed$op)(range_vec, parsed$val)")
+    add("}")
+    blank()
+  }
+
+  uses_sumifs <- any(grepl("\\bSUMIFS\\b", names(used_functions)))
+  uses_sumif <- any(grepl("\\bSUMIF\\b", names(used_functions))) && !uses_sumifs
+  uses_countifs <- any(grepl("\\bCOUNTIFS\\b", names(used_functions)))
+  uses_countif <- any(grepl("\\bCOUNTIF\\b", names(used_functions))) && !uses_countifs
+  uses_averageifs <- any(grepl("\\bAVERAGEIFS\\b", names(used_functions)))
+  uses_averageif <- any(grepl("\\bAVERAGEIF\\b", names(used_functions))) && !uses_averageifs
+
+  if (uses_sumifs || any(toupper(names(used_functions)) == "SUMIFS")) {
+    add("# SUMIFS: sum_range, criteria_range1, criteria1, criteria_range2, criteria2, ...")
+    add("SUMIFS <- function(sum_range, ...) {")
+    add("  args <- list(...)")
+    add("  mask <- rep(TRUE, length(sum_range))")
+    add("  for (i in seq(1, length(args), by = 2)) {")
+    add("    crit_range <- args[[i]]")
+    add("    crit_val <- args[[i + 1]]")
+    add("    parsed <- .parse_criterion(crit_val)")
+    add("    mask <- mask & .apply_criterion(crit_range, parsed)")
+    add("  }")
+    add("  sum(sum_range[mask], na.rm = TRUE)")
+    add("}")
+    blank()
+  }
+
+  if (uses_sumif || any(toupper(names(used_functions)) == "SUMIF")) {
+    add("# SUMIF: criteria_range, criteria, sum_range")
+    add("SUMIF <- function(criteria_range, criteria, sum_range) {")
+    add("  parsed <- .parse_criterion(criteria)")
+    add("  mask <- .apply_criterion(criteria_range, parsed)")
+    add("  sum(sum_range[mask], na.rm = TRUE)")
+    add("}")
+    blank()
+  }
+
+  if (uses_countifs || any(toupper(names(used_functions)) == "COUNTIFS")) {
+    add("# COUNTIFS: criteria_range1, criteria1, criteria_range2, criteria2, ...")
+    add("COUNTIFS <- function(...) {")
+    add("  args <- list(...)")
+    add("  n <- length(args[[1]])")
+    add("  mask <- rep(TRUE, n)")
+    add("  for (i in seq(1, length(args), by = 2)) {")
+    add("    crit_range <- args[[i]]")
+    add("    crit_val <- args[[i + 1]]")
+    add("    parsed <- .parse_criterion(crit_val)")
+    add("    mask <- mask & .apply_criterion(crit_range, parsed)")
+    add("  }")
+    add("  sum(mask, na.rm = TRUE)")
+    add("}")
+    blank()
+  }
+
+  if (uses_countif || any(toupper(names(used_functions)) == "COUNTIF")) {
+    add("# COUNTIF: criteria_range, criteria")
+    add("COUNTIF <- function(criteria_range, criteria) {")
+    add("  parsed <- .parse_criterion(criteria)")
+    add("  mask <- .apply_criterion(criteria_range, parsed)")
+    add("  sum(mask, na.rm = TRUE)")
+    add("}")
+    blank()
+  }
+
+  if (uses_averageifs || any(toupper(names(used_functions)) == "AVERAGEIFS")) {
+    add("# AVERAGEIFS: avg_range, criteria_range1, criteria1, criteria_range2, criteria2, ...")
+    add("AVERAGEIFS <- function(avg_range, ...) {")
+    add("  args <- list(...)")
+    add("  mask <- rep(TRUE, length(avg_range))")
+    add("  for (i in seq(1, length(args), by = 2)) {")
+    add("    crit_range <- args[[i]]")
+    add("    crit_val <- args[[i + 1]]")
+    add("    parsed <- .parse_criterion(crit_val)")
+    add("    mask <- mask & .apply_criterion(crit_range, parsed)")
+    add("  }")
+    add("  mean(avg_range[mask], na.rm = TRUE)")
+    add("}")
+    blank()
+  }
+
+  if (uses_averageif || any(toupper(names(used_functions)) == "AVERAGEIF")) {
+    add("# AVERAGEIF: criteria_range, criteria, avg_range")
+    add("AVERAGEIF <- function(criteria_range, criteria, avg_range) {")
+    add("  parsed <- .parse_criterion(criteria)")
+    add("  mask <- .apply_criterion(criteria_range, parsed)")
+    add("  mean(avg_range[mask], na.rm = TRUE)")
     add("}")
     blank()
   }

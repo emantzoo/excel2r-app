@@ -4,83 +4,145 @@
 
 Upload any multi-tab `.xlsx` workbook and get a standalone `.R` script that recreates its formula logic — including cross-sheet references, conditional aggregation (SUMIFS, COUNTIFS), nested functions, and more.
 
-![Excel2R](https://img.shields.io/badge/R-Shiny-blue) ![License](https://img.shields.io/badge/license-MIT-green)
+[![Excel2R](https://img.shields.io/badge/R-Shiny-blue)](https://img.shields.io/badge/R-Shiny-blue) [![License](https://img.shields.io/badge/license-MIT-green)](https://img.shields.io/badge/license-MIT-green)
+
+## What This Does (and Doesn't Do)
+
+**It does:**
+- Extract every formula from your workbook and translate it to equivalent R code
+- Resolve cross-sheet references and determine the correct execution order (topological sort)
+- Produce a self-contained `.R` script that loads your Excel data and runs all calculations in R
+- Flag unsupported functions clearly so nothing is silently skipped
+
+**It doesn't:**
+- Recreate the workbook visually (no formatting, charts, or cell styles)
+- Replace Excel as a UI — the output is R code for scripting and automation
+- Handle dynamic references (`INDIRECT`, `OFFSET`), array formulas, named ranges, or structured table references (`Table1[Column]`)
+
+**Use it when you want to:**
+- **Migrate** an Excel-based workflow into R so you can extend, automate, or version-control it
+- **Audit** complex workbooks by reading every formula as plain R, line by line
+- **Reproduce** calculations in a scripted pipeline instead of opening Excel
+- **Document** what a workbook actually computes, for handover or review
+
+## Generated Output Explained
+
+The `.R` script the tool produces is not a black box. Here's what each section does:
+
+### 1. Load data — each sheet becomes an R data frame
+
+```r
+Products <- as.data.frame(openxlsx2::read_xlsx(
+  excel_file, sheet = "Products",
+  rows = 1:25, skip_empty_rows = FALSE, col_names = FALSE
+))
+colnames(Products) <- c("A", "B", "C", "D", "E")
+```
+
+Column names match Excel (A, B, C, ...) and row indices match Excel row numbers, so `Products$D[10]` in R is cell D10 in Excel.
+
+### 2. Execute formulas — in dependency order
+
+Each formula is translated and wrapped in error handling:
+
+```r
+# D10 = SUM(D3:D9)
+Products$D[10] <- tryCatch(
+  sum(Products$D[3:9], na.rm=TRUE),
+  error = function(e) { message('Error in Products!D10: ', e$message); NA }
+)
+
+# E5 = IF(D5>1000, D5*0.1, 0)
+Products$E[5] <- tryCatch(
+  ifelse(Products$D[5]>1000, Products$D[5]*0.1, 0),
+  error = function(e) { message('Error in Products!E5: ', e$message); NA }
+)
+
+# Annual_Summary!B3 = 'Q1 Sales'!F20
+Annual_Summary$B[3] <- tryCatch(
+  Q1_Sales$F[20],
+  error = function(e) { message('Error in Annual Summary!B3: ', e$message); NA }
+)
+```
+
+Cross-sheet references are resolved automatically. Execution order is determined by Kahn's topological sort so dependencies are always computed first.
+
+### 3. Verify — check what was created
+
+```r
+cat("\n=== Script execution complete ===\n")
+cat("Data frames created:\n")
+cat(sprintf("  Products: %d rows x %d cols\n", nrow(Products), ncol(Products)))
+cat(sprintf("  Q1_Sales: %d rows x %d cols\n", nrow(Q1_Sales), ncol(Q1_Sales)))
+```
+
+After running the script, you have R data frames containing the same calculated values as your Excel workbook — ready for further analysis, plotting, or piping into other workflows.
 
 ## Features
 
-- **62 Excel functions** supported (SUM, IF, VLOOKUP, SUMIFS, INDEX/MATCH, ROUND, and many more)
-- **Auto-detects** all sheets and their actual dimensions — no hardcoded limits
+- **62 Excel functions** mapped to R equivalents (SUM, IF, VLOOKUP, SUMIFS, INDEX/MATCH, and more)
+- **Auto-detects** all sheets and their actual dimensions
 - **Cross-sheet references** resolved with dependency-ordered execution (Kahn's topological sort)
 - **Balanced-parenthesis parser** handles nested functions like `SUM(IF(A1>0,B1,0))`
-- **Downloadable .R script** that is self-contained and runnable standalone
+- **Downloadable .R script** — self-contained and runnable standalone
 - **Interactive review** of every formula transformation before download
-- **Unsupported functions** are clearly flagged (not silently skipped)
+- **Unsupported functions** clearly flagged (not silently skipped)
 
 ## Quick Start
 
 ```r
-# Install dependencies
 install.packages(c("shiny", "bslib", "DT", "tidyxl", "openxlsx2", "readxl"))
-
-# Run the app
 shiny::runApp("path/to/excel2r-app")
 ```
 
-Then upload an Excel file in the browser and follow the 4-step workflow:
-1. **Upload** → 2. **Review** formulas → 3. **Configure** options → 4. **Download** .R script
+Upload an Excel file in the browser and follow the 4-step workflow:
+
+**Upload** → **Review** formulas → **Configure** options → **Download** .R script
 
 ## Demo
 
 A demo workbook is included at `inst/demo/sales_report_demo.xlsx` with 5 sheets:
 
 | Sheet | Contents |
-|-------|----------|
+| --- | --- |
 | Products | Master product list with margins, COUNTIF |
 | Q1 Sales | 19 transactions with Revenue, Net Revenue, SUMIFS by region |
 | Q2 Sales | 15 transactions, same structure |
 | Annual Summary | Cross-sheet refs, IFERROR, IF, SUM, AVERAGE |
 | Pivot Analysis | COUNTIF, SUMIFS, nested IF (3 levels deep) |
 
-## Excel Functions: Tested vs Mapped
+## Supported Excel Functions
 
-The tool has transformation rules for 62 Excel functions, but **not all have been battle-tested with real-world workbooks**. The table below shows the honest status:
+### Tested (in demo workbook or unit tests)
 
-### Tested with real formulas (included in demo workbook or unit tests)
+| Category | Functions |
+| --- | --- |
+| Aggregation | SUM, AVERAGE, MIN, MAX |
+| Counting | COUNTIF |
+| Conditional | IF (incl. 3-level nesting), IFERROR |
+| Cond. Aggregation | SUMIF, SUMIFS |
+| Math | ROUND, ABS |
+| Logical | AND, OR, NOT |
+| Text | CONCATENATE, LEFT, LEN |
+| References | Cross-sheet, same-column, multi-column, whole-column, `$` absolute refs |
 
-| Category | Functions | Test Coverage |
-|----------|-----------|---------------|
-| **Aggregation** | SUM, AVERAGE, MIN, MAX | Tested in demo + unit tests |
-| **Counting** | COUNTIF | Tested in demo workbook |
-| **Conditional** | IF (incl. 3-level nesting), IFERROR | Tested in demo workbook |
-| **Cond. Aggregation** | SUMIF, SUMIFS | Tested in demo + real-world workbook |
-| **Math** | ROUND, ABS | Tested in unit tests |
-| **Logical** | AND, OR, NOT | Tested in unit tests |
-| **Text** | CONCATENATE, LEFT, LEN | Tested in unit tests |
-| **References** | Cross-sheet refs, same-column ranges, multi-column ranges, whole-column ranges, `$` absolute refs | All tested |
+### Mapped but not battle-tested
 
-### Mapped but not battle-tested (transform rules exist, may have edge cases)
+| Category | Functions |
+| --- | --- |
+| Aggregation | MEDIAN, PRODUCT |
+| Counting | COUNT, COUNTA, COUNTBLANK, COUNTIFS |
+| Conditional | IFS, IFNA |
+| Cond. Aggregation | AVERAGEIF, AVERAGEIFS |
+| Lookup | VLOOKUP, HLOOKUP, INDEX, MATCH, XLOOKUP |
+| Math | ROUNDUP, ROUNDDOWN, SQRT, POWER, LOG, LN, INT, MOD, EXP, SIGN |
+| Text | CONCAT, RIGHT, MID, UPPER, LOWER, TRIM, SUBSTITUTE, TEXT, VALUE |
+| Info | ISNA, ISBLANK, ISNUMBER, ISTEXT, ISERROR |
+| Other | ROW, COLUMN, PI |
 
-| Category | Functions | Notes |
-|----------|-----------|-------|
-| **Aggregation** | MEDIAN, PRODUCT | Simple wrappers, likely fine |
-| **Counting** | COUNT, COUNTA, COUNTBLANK, COUNTIFS | COUNTIFS delegates to ExcelFunctionsR |
-| **Conditional** | IFS, IFNA | IFS uses `dplyr::case_when()` — may need tuning |
-| **Cond. Aggregation** | AVERAGEIF, AVERAGEIFS | Delegates to ExcelFunctionsR |
-| **Lookup** | VLOOKUP, HLOOKUP, INDEX, MATCH, XLOOKUP | Custom helpers generated — approximate match may not be exact |
-| **Math** | ROUNDUP, ROUNDDOWN, SQRT, POWER, LOG, LN, INT, MOD, EXP, SIGN | Simple wrappers |
-| **Text** | CONCAT, RIGHT, MID, UPPER, LOWER, TRIM, SUBSTITUTE, TEXT, VALUE | Simple wrappers |
-| **Info** | ISNA, ISBLANK, ISNUMBER, ISTEXT, ISERROR | Simple wrappers |
-| **Other** | ROW, COLUMN, PI | Limited context support |
+### Not supported
 
-### Not supported (will be flagged as unsupported in output)
-
-- `INDIRECT`, `OFFSET` — dynamic references, cannot be statically translated
-- `CHOOSE`, `SWITCH` — not yet implemented
-- Array formulas (`{=SUM(IF(...))}` with Ctrl+Shift+Enter) — no special handling
-- `TRANSPOSE`, `SORT`, `UNIQUE`, `FILTER` — dynamic array functions
-- `GETPIVOTDATA` — pivot table references
-- Named ranges — not resolved (tidyxl extracts formulas with the names, not their definitions)
-- Structured table references (`Table1[Column]`) — not parsed
+`INDIRECT`, `OFFSET`, `CHOOSE`, `SWITCH`, array formulas, `TRANSPOSE`, `SORT`, `UNIQUE`, `FILTER`, `GETPIVOTDATA`, named ranges, structured table references.
 
 ## How It Works
 
@@ -106,22 +168,12 @@ Upload .xlsx
 Download
 ```
 
-## Generated Script Structure
-
-The output `.R` script contains:
-
-1. **Package setup** — `openxlsx2`, `ExcelFunctionsR` (only if needed)
-2. **Helper functions** — VLOOKUP, MATCH, ROUNDUP equivalents (only if used)
-3. **Data loading** — reads each sheet into an R data frame with proper types
-4. **Formula execution** — all formulas in dependency order, wrapped in `tryCatch()`
-5. **Verification summary** — prints data frame dimensions
-
 ## Project Structure
 
 ```
 excel2r-app/
 ├── app.R                        # Shiny app
-├── R/                           # Core modules (auto-sourced by Shiny)
+├── R/                           # Core modules
 │   ├── utils.R                  # Shared utilities
 │   ├── extract_formulas.R       # Formula extraction via tidyxl
 │   ├── parse_formula.R          # Balanced-paren tokenizer
@@ -137,27 +189,17 @@ excel2r-app/
 ## Testing
 
 ```r
-# Run all tests
 setwd("path/to/excel2r-app")
 source("run_tests.R")
 ```
 
-Tests cover:
-- **Unit tests** for each module (utils, parser, transforms, dependency ordering)
-- **Integration tests** against the demo workbook
-- **Shinytest2** tests for the web app UI
+Covers unit tests for each module, integration tests against the demo workbook, and shinytest2 tests for the UI.
 
 ## Dependencies
 
-**App runtime:**
-- `shiny`, `bslib`, `DT` — web UI
-- `tidyxl` — formula extraction
-- `openxlsx2` — data reading
-- `readxl` — sheet listing
+**App:** shiny, bslib, DT, tidyxl, openxlsx2, readxl
 
-**Generated scripts use:**
-- `openxlsx2` — data reading
-- `ExcelFunctionsR` — SUMIFS/COUNTIFS (only when needed)
+**Generated scripts use:** openxlsx2 only — conditional aggregation helpers (SUMIFS, COUNTIF, etc.) are embedded directly in the output script with no external dependencies.
 
 ## License
 

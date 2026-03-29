@@ -145,8 +145,9 @@ test_that("generated script handles SUMIFS formulas", {
   has_sumifs <- any(grepl("SUMIFS", result$report$R_Code))
   expect_true(has_sumifs)
 
-  # Script should reference ExcelFunctionsR
-  expect_true(grepl("ExcelFunctionsR", result$script))
+  # Script should contain custom SUMIFS helper (no ExcelFunctionsR dependency)
+  expect_true(grepl("SUMIFS <- function", result$script, fixed = TRUE))
+  expect_true(grepl("\\.parse_criterion", result$script))
 })
 
 test_that("generated script handles nested IF formulas", {
