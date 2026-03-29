@@ -335,28 +335,26 @@ server <- function(input, output, session) {
     updateCheckboxGroupInput(session, "selected_sheets", selected = character(0))
   })
 
-  # --- Regenerate script reactively when config changes ---
-  # Uses cached processing results; only regenerates the script text
-  generated_script <- reactive({
+  # --- Script generation helper (shared by reactive + verify) ---
+  build_script <- function(data_source = "excel") {
     req(rv$results, rv$file_path)
+    selected <- if (!is.null(input$selected_sheets)) {
+      input$selected_sheets
+    } else {
+      unique(rv$results$report$Sheet)
+    }
 
-    # Determine which sheets to include
-    selected <- if (!is.null(input$selected_sheets)) input$selected_sheets else unique(rv$results$report$Sheet)
-
-    data_source <- input$opt_data_source
     excel_path <- if (data_source == "excel" && nchar(input$opt_filepath) > 0) {
       input$opt_filepath
     } else {
       input$upload$name
     }
 
-    # Filter cached report for selected sheets
     report <- rv$results$report
     if (!is.null(selected)) {
       report <- report[report$Sheet %in% selected, ]
     }
 
-    # Detect sheet names and dims from cache
     all_sheets <- if (!is.null(selected)) selected else readxl::excel_sheets(rv$file_path)
     sheet_dims <- detect_sheet_dimensions(rv$file_path, all_sheets)
     used_functions <- detect_used_functions(report[, c("Sheet", "Cell", "Row", "Col", "Formula")])
@@ -364,7 +362,6 @@ server <- function(input, output, session) {
       report[, c("Sheet", "Cell", "Row", "Col", "Formula")]
     )
 
-    # Named tables: filter to selected sheets if enabled
     named_tables <- NULL
     if (isTRUE(input$opt_named_tables) && !is.null(rv$results$named_tables)) {
       named_tables <- rv$results$named_tables
@@ -387,6 +384,11 @@ server <- function(input, output, session) {
 
     list(script = script, report = report, warnings = rv$results$warnings,
          data_source = data_source)
+  }
+
+  # --- Regenerate script reactively when config changes ---
+  generated_script <- reactive({
+    build_script(data_source = input$opt_data_source)
   })
 
   # --- Script Preview ---
@@ -482,18 +484,21 @@ server <- function(input, output, session) {
 
   # --- Verify Tab ---
   observeEvent(input$btn_verify, {
-    req(rv$results, rv$file_path, generated_script())
+    req(rv$results, rv$file_path)
 
-    rv$verify <- NULL  # reset
+    rv$verify <- NULL
 
     withProgress(message = "Verifying R values vs Excel...", value = 0, {
       incProgress(0.1, detail = "Running generated script...")
 
       tryCatch({
+        # Always use Excel-mode script for verification
+        # (CSV files don't exist on disk — only created at download)
+        excel_version <- build_script(data_source = "excel")
         result <- verify_against_excel(
           file_path = rv$file_path,
-          report = generated_script()$report,
-          script_text = generated_script()$script
+          report = excel_version$report,
+          script_text = excel_version$script
         )
         rv$verify <- result
         incProgress(0.9, detail = "Done!")
