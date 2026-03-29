@@ -32,7 +32,8 @@ process_excel_file <- function(file_path,
     return(list(
       script = "# No formulas found in the uploaded Excel file.\n",
       report = data.frame(),
-      warnings = "No formulas found."
+      warnings = "No formulas found.",
+      named_tables = NULL
     ))
   }
 
