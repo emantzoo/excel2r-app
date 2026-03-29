@@ -27,6 +27,7 @@ Suggests:
     bslib,
     DT,
     testthat (>= 3.0.0),
+    shinytest2,
     knitr,
     rmarkdown
 VignetteBuilder: knitr

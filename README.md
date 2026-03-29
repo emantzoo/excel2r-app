@@ -4,7 +4,7 @@
 
 Upload any multi-tab `.xlsx` workbook and get a fully standalone package: tidy CSV data files and an R script (base R only, zero dependencies) that recreates every formula without needing Excel at runtime. Edit the CSVs, rerun the script, get updated results. Built-in verification compares every computed value against Excel's cached results before you commit to the migration.
 
-[![R-CMD-check](https://github.com/emantzoo/excel2r-app/actions/workflows/R-CMD-check.yml/badge.svg)](https://github.com/emantzoo/excel2r-app/actions/workflows/R-CMD-check.yml)
+[![R-CMD-check](https://github.com/emantzoo/excel2r/actions/workflows/R-CMD-check.yml/badge.svg)](https://github.com/emantzoo/excel2r/actions/workflows/R-CMD-check.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](https://opensource.org/licenses/MIT)
 
 ## Installation
@@ -13,7 +13,7 @@ Install from GitHub:
 
 ```r
 # install.packages("remotes")
-remotes::install_github("emantzoo/excel2r-app")
+remotes::install_github("emantzoo/excel2r")
 ```
 
 Then use the programmatic API:
@@ -247,7 +247,7 @@ Upload .xlsx
 ## Project Structure
 
 ```
-excel2r-app/
+excel2r/
 ├── DESCRIPTION                  # R package metadata
 ├── NAMESPACE                    # Exported functions
 ├── R/                           # Core modules
