@@ -1,10 +1,40 @@
 # excel2r
 
-**Migrate your entire Excel workbook to R — data and logic — in one step.**
+**Migrate your entire Excel workbook to R -- data and logic -- in one step.**
 
 Upload any multi-tab `.xlsx` workbook and get a fully standalone package: tidy CSV data files and an R script (base R only, zero dependencies) that recreates every formula without needing Excel at runtime. Edit the CSVs, rerun the script, get updated results. Built-in verification compares every computed value against Excel's cached results before you commit to the migration.
 
-[![Excel2R](https://img.shields.io/badge/R-Shiny-blue)](https://img.shields.io/badge/R-Shiny-blue) [![License](https://img.shields.io/badge/license-MIT-green)](https://img.shields.io/badge/license-MIT-green)
+[![R-CMD-check](https://github.com/emantzoo/excel2r-app/actions/workflows/R-CMD-check.yml/badge.svg)](https://github.com/emantzoo/excel2r-app/actions/workflows/R-CMD-check.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](https://opensource.org/licenses/MIT)
+
+## Installation
+
+Install from GitHub:
+
+```r
+# install.packages("remotes")
+remotes::install_github("emantzoo/excel2r-app")
+```
+
+Then use the programmatic API:
+
+```r
+library(excel2r)
+
+# One-step migration: script + CSVs + verification
+excel2r::migrate("workbook.xlsx", "output/")
+
+# Or process without writing files
+result <- excel2r::process("workbook.xlsx")
+cat(result$script)
+
+# Verify R results against Excel
+v <- excel2r::verify("workbook.xlsx", result)
+print(v$summary)
+
+# Launch the interactive Shiny app
+excel2r::run_app()
+```
 
 ## What This Does (and Doesn't Do)
 
@@ -133,16 +163,15 @@ Rerun the script. Totals update. No Excel involved.
 - **Interactive review** of every formula transformation before download
 - **Unsupported functions** clearly flagged (not silently skipped)
 
-## Quick Start
+## Quick Start (Shiny App)
 
 ```r
-install.packages(c("shiny", "bslib", "DT", "tidyxl", "openxlsx2", "readxl"))
-shiny::runApp("path/to/excel2r-app")
+excel2r::run_app()
 ```
 
 Upload an Excel file and follow the 5-step workflow:
 
-**Upload** → **Review** formulas → **Configure** options → **Download** .R script or .zip → **Verify** against Excel
+**Upload** > **Review** formulas > **Configure** options > **Download** .R script or .zip > **Verify** against Excel
 
 ## Demo
 
@@ -219,40 +248,52 @@ Upload .xlsx
 
 ```
 excel2r-app/
-├── app.R                        # Shiny app (5-tab workflow)
+├── DESCRIPTION                  # R package metadata
+├── NAMESPACE                    # Exported functions
 ├── R/                           # Core modules
+│   ├── migrate.R                # Public API: migrate, process, verify, run_app
+│   ├── excel2r-package.R        # Package-level documentation
 │   ├── utils.R                  # Shared utilities
 │   ├── extract_formulas.R       # Formula extraction via tidyxl
 │   ├── detect_tables.R          # Named table detection via openxlsx2
 │   ├── export_csv.R             # Tidy CSV export for standalone mode
 │   ├── parse_formula.R          # Balanced-paren tokenizer
-│   ├── transform_references.R   # Cell/range → R syntax
-│   ├── transform_functions.R    # 62 Excel functions → R
+│   ├── transform_references.R   # Cell/range -> R syntax
+│   ├── transform_functions.R    # 62 Excel functions -> R
 │   ├── dependency_order.R       # Kahn's topological sort
 │   ├── generate_script.R        # Script assembler (Excel + CSV modes)
 │   └── verify_values.R          # R vs Excel value comparison
+├── inst/app/app.R               # Shiny app (5-tab workflow)
+├── inst/extdata/                # Demo Excel workbooks
+├── man/                         # Auto-generated documentation
+├── vignettes/                   # Getting started guide
 ├── tests/testthat/              # Unit & integration tests
-├── inst/extdata/                   # Demo Excel workbooks
+├── .github/workflows/           # CI (R CMD check)
 ├── Dockerfile                   # Cloud Run deployment
-└── run_tests.R                  # Test runner
+└── run_tests.R                  # Dev test runner
 ```
 
 ## Testing
 
 ```r
-setwd("path/to/excel2r-app")
+# Standard R package testing
+devtools::test()
+
+# Or use the dev runner
 source("run_tests.R")
 ```
 
-Covers unit tests for each module (parser, transforms, dependency ordering, CSV export, verification), integration tests against the demo workbook, and shinytest2 tests for the UI.
+Covers unit tests for each module (parser, transforms, dependency ordering, CSV export, verification), integration tests against the demo workbook, API tests for the public functions, and shinytest2 tests for the UI.
 
 ## Dependencies
 
-**App:** shiny, bslib, DT, tidyxl, openxlsx2, readxl
+**Package (Imports):** tidyxl, openxlsx2, readxl
+
+**Shiny app (Suggests):** shiny, bslib, DT
 
 **Generated scripts (Excel mode):** openxlsx2
 
-**Generated scripts (CSV mode):** none — base R only
+**Generated scripts (CSV mode):** none -- base R only
 
 ## Future Work
 
