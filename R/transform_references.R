@@ -132,8 +132,10 @@ transform_cell_references <- function(formula, sheet, sheet_dims = NULL) {
     if (ref == "") next
     transformed_ref <- transform_single_cell(ref, sheet)
     # Use word boundaries to avoid replacing substrings
+    # Escape all regex special characters in the ref
+    escaped_ref <- gsub("([\\\\\\[\\](){}^$.*+?|])", "\\\\\\1", ref, perl = TRUE)
     placeholder_formula <- gsub(
-      paste0("(?<![A-Za-z0-9_$])", gsub("\\$", "\\\\$", ref), "(?![A-Za-z0-9])"),
+      paste0("(?<![A-Za-z0-9_$])", escaped_ref, "(?![A-Za-z0-9])"),
       transformed_ref,
       placeholder_formula,
       perl = TRUE
