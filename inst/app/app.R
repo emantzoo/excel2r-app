@@ -1,8 +1,9 @@
 # =============================================================================
 # Excel2R — Convert Excel formulas to executable R code
-# Shiny Web Application
+# Shiny Web Application (package mode: inst/app/app.R)
 # =============================================================================
 
+library(excel2r)
 library(shiny)
 library(bslib)
 library(DT)

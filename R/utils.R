@@ -2,15 +2,16 @@
 # utils.R — Shared utility functions for Excel-to-R conversion
 # =============================================================================
 
-#' Sanitize a sheet name into a valid R identifier
-#' "Non-Residents Tour Expenditure" -> "NonResidents_Tour_Expenditure"
+#' @keywords internal
+#' @noRd
 sanitize_sheet_name <- function(sheet) {
   sheet <- gsub(" ", "_", sheet)
   sheet <- gsub("[^[:alnum:]_]", "", sheet)
   sheet
 }
 
-#' Convert column letter(s) to numeric index: A=1, B=2, ..., Z=26, AA=27, ...
+#' @keywords internal
+#' @noRd
 col_letter_to_index <- function(col) {
   col <- toupper(col)
   chars <- strsplit(col, "")[[1]]
@@ -21,7 +22,8 @@ col_letter_to_index <- function(col) {
   idx
 }
 
-#' Convert numeric index to column letter(s): 1=A, 26=Z, 27=AA, ...
+#' @keywords internal
+#' @noRd
 index_to_col_letter <- function(idx) {
   result <- ""
   while (idx > 0) {
@@ -32,13 +34,15 @@ index_to_col_letter <- function(idx) {
   result
 }
 
-#' Generate column names for n columns: A, B, ..., Z, AA, AB, ...
+#' @keywords internal
+#' @noRd
 generate_col_names <- function(num_cols) {
   if (num_cols < 1) stop("Number of columns must be at least 1")
   vapply(1:num_cols, index_to_col_letter, character(1))
 }
 
-#' Check if a character position in a formula is inside a quoted string
+#' @keywords internal
+#' @noRd
 is_within_quotes <- function(formula, pos) {
   quote_positions <- gregexpr('"', formula)[[1]]
   if (quote_positions[1] == -1) return(FALSE)
@@ -54,8 +58,8 @@ is_within_quotes <- function(formula, pos) {
   FALSE
 }
 
-#' Parse a cell address into column and row components
-#' "D10" -> list(col="D", row=10), "$AB$5" -> list(col="AB", row=5)
+#' @keywords internal
+#' @noRd
 parse_cell_address <- function(cell) {
   col <- gsub("[0-9$]+", "", cell)
   row_str <- gsub("[^0-9]", "", cell)
@@ -63,7 +67,8 @@ parse_cell_address <- function(cell) {
   list(col = col, row = row)
 }
 
-#' Expand a range like "B3:E10" into all individual cell addresses
+#' @keywords internal
+#' @noRd
 expand_range_to_cells <- function(range_str) {
   # Remove sheet prefix if present
   cell_part <- range_str

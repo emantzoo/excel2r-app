@@ -2,10 +2,7 @@
 # transform_functions.R — Excel function -> R code registry
 # =============================================================================
 
-# Registry: each entry is a function that takes a vector of transformed argument
-# strings and returns the R code string.
-# Functions are looked up by uppercase name.
-
+#' @keywords internal
 excel_function_registry <- list(
 
   # --- Aggregation ---
@@ -382,20 +379,20 @@ excel_function_registry <- list(
   }
 )
 
-#' Get list of supported function names
+#' @keywords internal
+#' @noRd
 get_supported_functions <- function() {
   names(excel_function_registry)
 }
 
-#' Check if a function is supported
+#' @keywords internal
+#' @noRd
 is_function_supported <- function(func_name) {
   toupper(func_name) %in% names(excel_function_registry)
 }
 
-#' Transform a single Excel function call to R code
-#' @param func_name The Excel function name (e.g., "SUM")
-#' @param args Character vector of already-transformed argument strings
-#' @return list(status = "ok"|"unsupported", code = "R code string")
+#' @keywords internal
+#' @noRd
 transform_function_call <- function(func_name, args) {
   upper_name <- toupper(func_name)
   if (upper_name %in% names(excel_function_registry)) {
@@ -415,10 +412,8 @@ transform_function_call <- function(func_name, args) {
   }
 }
 
-#' Transform all function calls in a formula (after references are already transformed)
-#' Processes innermost functions first (bottom-up)
-#' @param formula Formula string with R-syntax references
-#' @return list(formula = transformed string, warnings = character vector)
+#' @keywords internal
+#' @noRd
 transform_all_functions <- function(formula) {
   warnings <- character(0)
   result <- formula

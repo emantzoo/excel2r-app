@@ -2,12 +2,8 @@
 # verify_values.R — Compare R-computed values against Excel cached values
 # =============================================================================
 
-#' Run generated script and compare R values vs Excel cached formula results
-#'
-#' @param file_path Path to the Excel file
-#' @param report Data frame from process_excel_file()$report
-#' @param script_text The generated R script text
-#' @return list(summary, mismatches) where mismatches contains only real differences
+#' @keywords internal
+#' @noRd
 verify_against_excel <- function(file_path, report, script_text) {
   # Run the generated script in an isolated environment
   env <- new.env(parent = globalenv())

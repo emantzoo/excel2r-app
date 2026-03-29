@@ -2,9 +2,8 @@
 # detect_tables.R — Detect Excel named tables (ListObjects)
 # =============================================================================
 
-#' Parse a table ref like "A1:E151" or "$A$1:$E$151" into components
-#' @param ref Cell range string in A1 notation
-#' @return list with col_start, col_end, row_start, row_end, col_start_idx, col_end_idx
+#' @keywords internal
+#' @noRd
 parse_table_ref <- function(ref) {
   parts <- strsplit(gsub("\\$", "", ref), ":")[[1]]
   col_start <- gsub("[0-9]", "", parts[1])
@@ -22,11 +21,8 @@ parse_table_ref <- function(ref) {
   )
 }
 
-#' Detect all named tables across all sheets
-#' @param file_path Path to .xlsx file
-#' @param sheet_names Character vector of sheet names (NULL = all)
-#' @return Data frame with columns: sheet, table_name, ref, header_row,
-#'         data_start_row, data_end_row, col_start, col_end, col_names (list column)
+#' @keywords internal
+#' @noRd
 detect_named_tables <- function(file_path, sheet_names = NULL) {
   wb <- openxlsx2::wb_load(file_path)
 

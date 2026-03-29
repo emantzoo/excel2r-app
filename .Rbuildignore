@@ -1,0 +1,8 @@
+^\.github$
+^Dockerfile$
+^README\.Rmd$
+^LICENSE\.md$
+^\.Rproj\.user$
+^.*\.Rproj$
+^inst/create_demo_workbook\.R$
+^run_tests\.R$

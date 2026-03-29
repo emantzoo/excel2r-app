@@ -1,0 +1,30 @@
+Package: excel2r
+Title: Migrate Excel Workbooks to R
+Version: 0.1.0
+Authors@R:
+    person("Eirini", "Mantzouni", email = "emantzouni@gmail.com",
+           role = c("aut", "cre"))
+Description: Converts Excel formula workbooks into standalone R scripts.
+    Extracts every formula, translates 62 Excel functions to R equivalents,
+    resolves cross-sheet references, determines execution order via topological
+    sort, detects named tables, and optionally exports raw data as tidy CSVs
+    for a fully Excel-free workflow. Includes built-in verification comparing
+    R-computed values against Excel's cached results.
+License: MIT + file LICENSE
+URL: https://github.com/emantzoo/excel2r
+BugReports: https://github.com/emantzoo/excel2r/issues
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Depends:
+    R (>= 4.1.0)
+Imports:
+    tidyxl,
+    openxlsx2,
+    readxl
+Suggests:
+    shiny,
+    bslib,
+    DT,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3

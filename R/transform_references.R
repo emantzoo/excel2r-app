@@ -2,11 +2,8 @@
 # transform_references.R — Transform Excel cell/range references to R syntax
 # =============================================================================
 
-#' Transform a single cell reference to R syntax
-#' "D10" -> "Sheet$D[10]", "'Other Sheet'!A1" -> "Other_Sheet$A[1]"
-#' @param ref The cell reference string
-#' @param current_sheet Sanitized name of the current sheet
-#' @return R-syntax string
+#' @keywords internal
+#' @noRd
 transform_single_cell <- function(ref, current_sheet) {
   if (grepl("!", ref)) {
     parts <- strsplit(ref, "!")[[1]]
@@ -27,12 +24,8 @@ transform_single_cell <- function(ref, current_sheet) {
   sprintf("%s$%s[%d]", sheet, col, row)
 }
 
-#' Transform a range reference to R syntax
-#' Handles same-column, multi-column, and whole-column ranges
-#' @param ref The range reference string (e.g., "D10:D12", "A1:D10", "A:A")
-#' @param current_sheet Sanitized name of the current sheet
-#' @param sheet_dims Named list of sheet dimensions from detect_sheet_dimensions()
-#' @return R-syntax string
+#' @keywords internal
+#' @noRd
 transform_range <- function(ref, current_sheet, sheet_dims = NULL) {
   if (grepl("!", ref)) {
     parts <- strsplit(ref, "!")[[1]]
@@ -99,12 +92,8 @@ transform_range <- function(ref, current_sheet, sheet_dims = NULL) {
   }
 }
 
-#' Transform all cell and range references in a formula
-#' Main entry point for reference transformation
-#' @param formula The Excel formula string
-#' @param sheet Sanitized sheet name (current sheet context)
-#' @param sheet_dims Sheet dimensions from detect_sheet_dimensions()
-#' @return Transformed formula with R-syntax references
+#' @keywords internal
+#' @noRd
 transform_cell_references <- function(formula, sheet, sheet_dims = NULL) {
   # Step 1: Extract ranges and replace with placeholders
   extracted <- extract_ranges(formula)
@@ -155,7 +144,8 @@ transform_cell_references <- function(formula, sheet, sheet_dims = NULL) {
   placeholder_formula
 }
 
-#' Transform percentage literals: 100% -> 1, 50% -> 0.5
+#' @keywords internal
+#' @noRd
 transform_percentages <- function(formula) {
   matches <- gregexpr("[0-9]+\\.?[0-9]*%", formula)[[1]]
   if (matches[1] == -1) return(formula)

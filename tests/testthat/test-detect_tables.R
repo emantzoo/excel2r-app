@@ -32,20 +32,6 @@ test_that("parse_table_ref handles multi-letter columns", {
   expect_equal(result$col_end_idx, 52)
 })
 
-# Helper to find test file with named tables
-find_named_tables_file <- function() {
-  candidates <- c(
-    "inst/demo/test_named_tables.xlsx",
-    "../../inst/demo/test_named_tables.xlsx",
-    file.path(getwd(), "inst/demo/test_named_tables.xlsx"),
-    file.path(getwd(), "../../inst/demo/test_named_tables.xlsx")
-  )
-  for (f in candidates) {
-    if (file.exists(f)) return(normalizePath(f))
-  }
-  NULL
-}
-
 # --- detect_named_tables ---
 
 test_that("detect_named_tables finds tables in test workbook", {

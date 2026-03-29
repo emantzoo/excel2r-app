@@ -3,11 +3,8 @@
 # Handles balanced parentheses and nested function calls
 # =============================================================================
 
-#' Find the matching closing parenthesis for an opening parenthesis
-#' Respects string literals (double-quoted)
-#' @param formula The formula string
-#' @param open_pos Position of the opening '('
-#' @return Position of the matching ')'
+#' @keywords internal
+#' @noRd
 find_matching_paren <- function(formula, open_pos) {
   n <- nchar(formula)
   depth <- 1
@@ -29,10 +26,8 @@ find_matching_paren <- function(formula, open_pos) {
   i
 }
 
-#' Split function arguments at top-level commas (depth 0)
-#' Respects nested parentheses and string literals
-#' @param content String inside the outermost parentheses (without the parens themselves)
-#' @return Character vector of argument strings
+#' @keywords internal
+#' @noRd
 split_function_args <- function(content) {
   args <- character(0)
   depth <- 0
@@ -69,11 +64,8 @@ split_function_args <- function(content) {
   args
 }
 
-#' Find all top-level function calls in a formula
-#' Returns a list of list(name, start, open_paren, close_paren, args_str)
-#' Processes from right-to-left for safe replacement
-#' @param formula The formula string
-#' @return List of function call descriptors, ordered right-to-left
+#' @keywords internal
+#' @noRd
 find_function_calls <- function(formula) {
   # Pattern: function name immediately followed by (
   # Function names: one or more uppercase letters/digits/dots, starting with letter
@@ -120,10 +112,8 @@ find_function_calls <- function(formula) {
   calls
 }
 
-#' Identify and extract range references from a formula, replacing with placeholders
-#' Handles cross-sheet ranges like 'Sheet Name'!A1:B10
-#' @param formula The formula string
-#' @return list(placeholder_formula, placeholder_map)
+#' @keywords internal
+#' @noRd
 extract_ranges <- function(formula) {
   colon_positions <- gregexpr(":", formula)[[1]]
   placeholder_map <- list()

@@ -2,26 +2,21 @@
 # Tests for the Shiny app using shinytest2
 # =============================================================================
 
-# Helper to find the project root
+# Helper to find the app directory
 find_project_root <- function() {
+  # Package mode
+  d <- system.file("app", package = "excel2r")
+  if (d != "") return(d)
+  # Standalone mode
   candidates <- c(
     ".",
     "../..",
     file.path(getwd(), "../..")
   )
-  for (d in candidates) {
-    if (file.exists(file.path(d, "app.R"))) return(normalizePath(d))
-  }
-  NULL
-}
-
-find_demo_file <- function() {
-  candidates <- c(
-    "inst/demo/sales_report_demo.xlsx",
-    "../../inst/demo/sales_report_demo.xlsx"
-  )
-  for (f in candidates) {
-    if (file.exists(f)) return(normalizePath(f))
+  for (dd in candidates) {
+    if (file.exists(file.path(dd, "inst/app/app.R"))) {
+      return(normalizePath(file.path(dd, "inst/app")))
+    }
   }
   NULL
 }

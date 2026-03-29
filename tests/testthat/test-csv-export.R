@@ -2,14 +2,6 @@
 # Tests for CSV export mode
 # =============================================================================
 
-find_demo_file <- function() {
-  f <- file.path(
-    normalizePath(file.path(getwd(), "..", ".."), winslash = "/"),
-    "inst/demo/sales_report_demo.xlsx"
-  )
-  if (file.exists(f)) f else NULL
-}
-
 # --- export_sheet_csvs (unfiltered, backward compat) ---
 
 test_that("export_sheet_csvs creates tidy CSV files", {

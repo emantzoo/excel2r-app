@@ -2,11 +2,8 @@
 # extract_formulas.R — Extract formulas and dimensions from any Excel file
 # =============================================================================
 
-#' Extract all formulas from an Excel file
-#' Auto-detects all sheets if none specified
-#' @param file_path Path to .xlsx file
-#' @param sheet_names Optional character vector of sheet names to process
-#' @return Data frame with columns: Sheet, Cell, Row, Col, Formula
+#' @keywords internal
+#' @noRd
 extract_all_formulas <- function(file_path, sheet_names = NULL) {
   if (!requireNamespace("tidyxl", quietly = TRUE)) {
     stop("Package 'tidyxl' is required. Install with: install.packages('tidyxl')")
@@ -40,10 +37,8 @@ extract_all_formulas <- function(file_path, sheet_names = NULL) {
   formula_cells
 }
 
-#' Detect actual dimensions (max row, max col) for each sheet
-#' @param file_path Path to .xlsx file
-#' @param sheet_names Optional character vector of sheet names
-#' @return Named list: sheet_name -> list(max_row, max_col)
+#' @keywords internal
+#' @noRd
 detect_sheet_dimensions <- function(file_path, sheet_names = NULL) {
   if (is.null(sheet_names)) {
     sheet_names <- readxl::excel_sheets(file_path)
@@ -67,9 +62,8 @@ detect_sheet_dimensions <- function(file_path, sheet_names = NULL) {
   dims
 }
 
-#' Identify which Excel functions are used in the formulas
-#' @param formula_data Data frame from extract_all_formulas()
-#' @return Named integer vector: function_name -> count
+#' @keywords internal
+#' @noRd
 detect_used_functions <- function(formula_data) {
   # Match function names: word chars followed by (
   all_funcs <- unlist(regmatches(formula_data$Formula,

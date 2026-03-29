@@ -2,10 +2,8 @@
 # dependency_order.R — Kahn's topological sort for formula execution ordering
 # =============================================================================
 
-#' Determine the execution order of formulas across sheets and cells
-#' Two-level ordering: (1) sheet dependencies, (2) cell dependencies within sheets
-#' @param formula_data Data frame with columns: Sheet, Cell, Formula
-#' @return list(sheet_order, cell_orders, warnings)
+#' @keywords internal
+#' @noRd
 determine_execution_order <- function(formula_data) {
   warnings <- character(0)
 
@@ -136,10 +134,8 @@ determine_execution_order <- function(formula_data) {
   list(sheet_order = sheet_order, cell_orders = cell_orders, warnings = warnings)
 }
 
-#' Kahn's topological sort algorithm
-#' @param nodes Character vector of node names
-#' @param deps Named list: node -> vector of nodes it depends on
-#' @return Sorted character vector, or NULL if cycle detected
+#' @keywords internal
+#' @noRd
 kahns_sort <- function(nodes, deps) {
   # Build reverse graph
   reverse_graph <- setNames(vector("list", length(nodes)), nodes)

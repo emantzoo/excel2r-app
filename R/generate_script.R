@@ -2,14 +2,8 @@
 # generate_script.R — Assembles the downloadable .R output script
 # =============================================================================
 
-#' Main entry point: process an Excel file and generate an R script
-#' @param file_path Path to the uploaded .xlsx file
-#' @param sheet_names Optional: which sheets to include (NULL = all)
-#' @param wrap_trycatch Wrap each formula in tryCatch? (default TRUE)
-#' @param include_comments Include original Excel formulas as comments? (default TRUE)
-#' @param excel_path_in_script Path to write in the generated script's read_xlsx() calls
-#' @param progress_callback Optional function(step, detail) for Shiny progress
-#' @return list(script = character string, report = data.frame, warnings = character vector)
+#' @keywords internal
+#' @noRd
 process_excel_file <- function(file_path,
                                 sheet_names = NULL,
                                 wrap_trycatch = TRUE,
@@ -142,7 +136,8 @@ process_excel_file <- function(file_path,
 }
 
 
-#' Generate the self-contained R script
+#' @keywords internal
+#' @noRd
 generate_r_script <- function(excel_path, formula_data, sheet_names, sheet_dims,
                                exec_order, used_functions, wrap_trycatch, include_comments,
                                named_tables = NULL, data_source = "excel") {
@@ -639,11 +634,8 @@ generate_r_script <- function(excel_path, formula_data, sheet_names, sheet_dims,
 }
 
 
-#' Resolve which sheet a range reference targets
-#' @param rng Range string, possibly with sheet prefix like 'Sheet1'!A:A or Sheet1!A:A
-#' @param default_sheet The sheet the formula lives in (fallback)
-#' @param sheet_names All known sheet names
-#' @return The target sheet name (original, not sanitized)
+#' @keywords internal
+#' @noRd
 resolve_range_sheet <- function(rng, default_sheet, sheet_names) {
   if (!grepl("!", rng)) return(default_sheet)
   sheet_part <- strsplit(rng, "!")[[1]][1]
@@ -658,8 +650,8 @@ resolve_range_sheet <- function(rng, default_sheet, sheet_names) {
   default_sheet
 }
 
-#' Identify which columns are used as criteria in SUMIF/SUMIFS formulas
-#' These must be kept as character type when loading data
+#' @keywords internal
+#' @noRd
 identify_criteria_columns <- function(formula_data, sheet_names) {
   criteria_cols <- setNames(vector("list", length(sheet_names)), sheet_names)
 

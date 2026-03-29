@@ -38,20 +38,6 @@ test_that("identify_criteria_columns returns empty for no conditional agg", {
   expect_equal(length(result[["S1"]]), 0)
 })
 
-# Helper to find demo file
-find_demo_file <- function() {
-  candidates <- c(
-    "inst/demo/sales_report_demo.xlsx",
-    "../../inst/demo/sales_report_demo.xlsx",
-    file.path(getwd(), "inst/demo/sales_report_demo.xlsx"),
-    file.path(getwd(), "../../inst/demo/sales_report_demo.xlsx")
-  )
-  for (f in candidates) {
-    if (file.exists(f)) return(normalizePath(f))
-  }
-  NULL
-}
-
 # --- Full pipeline: process_excel_file ---
 
 test_that("process_excel_file returns proper structure on demo file", {

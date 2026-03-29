@@ -2,17 +2,8 @@
 # export_csv.R — Export sheet data as tidy long-format CSVs
 # =============================================================================
 
-#' Extract all cells referenced by formulas across the workbook
-#'
-#' Parses every formula to find single-cell refs, range refs, cross-sheet refs,
-#' and whole-column refs. Returns the union of all referenced cell addresses
-#' per sheet. Cells within a range are included even if blank in Excel.
-#'
-#' @param formula_data Data frame with columns: Sheet, Cell, Row, Col, Formula
-#' @param sheet_names Character vector of all sheet names
-#' @param sheet_dims Named list from detect_sheet_dimensions()
-#' @return Named list: sheet_name -> list(cells = character(), whole_cols = character())
-#'   cells: specific cell addresses; whole_cols: column letters referenced in full
+#' @keywords internal
+#' @noRd
 extract_referenced_cells <- function(formula_data, sheet_names, sheet_dims = NULL) {
   referenced <- setNames(
     lapply(sheet_names, function(s) list(cells = character(0), whole_cols = character(0))),
@@ -130,16 +121,8 @@ extract_referenced_cells <- function(formula_data, sheet_names, sheet_dims = NUL
   referenced
 }
 
-#' Export each sheet's raw (non-formula) cell values as tidy CSV
-#'
-#' @param file_path Path to .xlsx file
-#' @param sheet_names Sheets to export
-#' @param output_dir Directory to write CSVs to
-#' @param formula_data Optional data frame with Formula column. When provided,
-#'   only cells referenced by formulas are exported (plus blank slots as empty rows).
-#' @param sheet_dims Optional sheet dimensions from detect_sheet_dimensions().
-#'   Used for whole-column reference expansion. Auto-detected if NULL and formula_data given.
-#' @return Named character vector: sheet_name -> csv_path
+#' @keywords internal
+#' @noRd
 export_sheet_csvs <- function(file_path, sheet_names, output_dir,
                                formula_data = NULL, sheet_dims = NULL) {
   dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
