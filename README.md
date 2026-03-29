@@ -2,7 +2,7 @@
 
 **Convert Excel formulas to executable R code.**
 
-Upload any multi-tab `.xlsx` workbook and get a standalone `.R` script that recreates its formula logic — including cross-sheet references, conditional aggregation (SUMIFS, COUNTIFS), nested functions, and more.
+Upload any multi-tab `.xlsx` workbook and get a standalone `.R` script that recreates its formula logic — including cross-sheet references, conditional aggregation (SUMIFS, COUNTIFS), nested functions, and named table detection.
 
 [![Excel2R](https://img.shields.io/badge/R-Shiny-blue)](https://img.shields.io/badge/R-Shiny-blue) [![License](https://img.shields.io/badge/license-MIT-green)](https://img.shields.io/badge/license-MIT-green)
 
@@ -11,13 +11,14 @@ Upload any multi-tab `.xlsx` workbook and get a standalone `.R` script that recr
 **It does:**
 - Extract every formula from your workbook and translate it to equivalent R code
 - Resolve cross-sheet references and determine the correct execution order (topological sort)
+- Detect named tables (ListObjects) and generate properly named R data frames with real column headers
 - Produce a self-contained `.R` script that loads your Excel data and runs all calculations in R
 - Flag unsupported functions clearly so nothing is silently skipped
 
 **It doesn't:**
 - Recreate the workbook visually (no formatting, charts, or cell styles)
 - Replace Excel as a UI — the output is R code for scripting and automation
-- Handle dynamic references (`INDIRECT`, `OFFSET`), array formulas, named ranges, or structured table references (`Table1[Column]`)
+- Handle dynamic references (`INDIRECT`, `OFFSET`), array formulas, or structured table references (`Table1[Column]`)
 
 **Use it when you want to:**
 - **Migrate** an Excel-based workflow into R so you can extend, automate, or version-control it
@@ -41,7 +42,19 @@ colnames(Products) <- c("A", "B", "C", "D", "E")
 
 Column names match Excel (A, B, C, ...) and row indices match Excel row numbers, so `Products$D[10]` in R is cell D10 in Excel.
 
-### 2. Execute formulas — in dependency order
+### 2. Named tables — real column names for downstream use
+
+When the workbook contains named tables (Insert → Table in Excel), the script generates additional data frames with proper headers:
+
+```r
+# Table "SalesData" on sheet "Products" (A1:E151)
+SalesData <- Products[2:151, 1:5]
+colnames(SalesData) <- c("Product", "Category", "Price", "Quantity", "Revenue")
+```
+
+The positional frames (`Products$A[10]`) are kept for formula execution. The named table frames (`SalesData$Revenue`) are for your downstream analysis — ready to use with dplyr, ggplot2, or any R workflow.
+
+### 3. Execute formulas — in dependency order
 
 Each formula is translated and wrapped in error handling:
 
@@ -67,13 +80,14 @@ Annual_Summary$B[3] <- tryCatch(
 
 Cross-sheet references are resolved automatically. Execution order is determined by Kahn's topological sort so dependencies are always computed first.
 
-### 3. Verify — check what was created
+### 4. Verify — check what was created
 
 ```r
 cat("\n=== Script execution complete ===\n")
 cat("Data frames created:\n")
 cat(sprintf("  Products: %d rows x %d cols\n", nrow(Products), ncol(Products)))
 cat(sprintf("  Q1_Sales: %d rows x %d cols\n", nrow(Q1_Sales), ncol(Q1_Sales)))
+cat(sprintf("  SalesData (table): %d rows x %d cols\n", nrow(SalesData), ncol(SalesData)))
 ```
 
 After running the script, you have R data frames containing the same calculated values as your Excel workbook — ready for further analysis, plotting, or piping into other workflows.
@@ -81,6 +95,7 @@ After running the script, you have R data frames containing the same calculated 
 ## Features
 
 - **62 Excel functions** mapped to R equivalents (SUM, IF, VLOOKUP, SUMIFS, INDEX/MATCH, and more)
+- **Named table detection** — Excel ListObjects become properly named R data frames with real column headers
 - **Auto-detects** all sheets and their actual dimensions
 - **Cross-sheet references** resolved with dependency-ordered execution (Kahn's topological sort)
 - **Balanced-parenthesis parser** handles nested functions like `SUM(IF(A1>0,B1,0))`
@@ -142,7 +157,7 @@ A demo workbook is included at `inst/demo/sales_report_demo.xlsx` with 5 sheets:
 
 ### Not supported
 
-`INDIRECT`, `OFFSET`, `CHOOSE`, `SWITCH`, array formulas, `TRANSPOSE`, `SORT`, `UNIQUE`, `FILTER`, `GETPIVOTDATA`, named ranges, structured table references.
+`INDIRECT`, `OFFSET`, `CHOOSE`, `SWITCH`, array formulas, `TRANSPOSE`, `SORT`, `UNIQUE`, `FILTER`, `GETPIVOTDATA`, named ranges, structured table references (`Table1[Column]`).
 
 ## How It Works
 
@@ -150,7 +165,7 @@ A demo workbook is included at `inst/demo/sales_report_demo.xlsx` with 5 sheets:
 Upload .xlsx
     │
     ▼
-1. Extract formulas (tidyxl)
+1. Extract formulas (tidyxl) + detect named tables (openxlsx2)
     │
     ▼
 2. Tokenize & parse (balanced-paren parser)
@@ -162,7 +177,7 @@ Upload .xlsx
 4. Determine execution order (Kahn's topological sort)
     │
     ▼
-5. Generate self-contained .R script
+5. Generate self-contained .R script (with named table data frames)
     │
     ▼
 Download
@@ -176,6 +191,7 @@ excel2r-app/
 ├── R/                           # Core modules
 │   ├── utils.R                  # Shared utilities
 │   ├── extract_formulas.R       # Formula extraction via tidyxl
+│   ├── detect_tables.R          # Named table detection via openxlsx2
 │   ├── parse_formula.R          # Balanced-paren tokenizer
 │   ├── transform_references.R   # Cell/range → R syntax
 │   ├── transform_functions.R    # 62 Excel functions → R
@@ -200,6 +216,11 @@ Covers unit tests for each module, integration tests against the demo workbook, 
 **App:** shiny, bslib, DT, tidyxl, openxlsx2, readxl
 
 **Generated scripts use:** openxlsx2 only — conditional aggregation helpers (SUMIFS, COUNTIF, etc.) are embedded directly in the output script with no external dependencies.
+
+## Future Work
+
+- **Structured table references** — translate `Table1[Column]` and `[@Column]` syntax using detected table metadata
+- **Named ranges** — resolve workbook-level and sheet-level named ranges into cell references
 
 ## License
 

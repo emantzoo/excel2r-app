@@ -14,6 +14,7 @@ process_excel_file <- function(file_path,
                                 sheet_names = NULL,
                                 wrap_trycatch = TRUE,
                                 include_comments = TRUE,
+                                include_named_tables = TRUE,
                                 excel_path_in_script = NULL,
                                 progress_callback = NULL) {
 
@@ -46,6 +47,16 @@ process_excel_file <- function(file_path,
 
   # Detect used functions
   used_functions <- detect_used_functions(formula_data)
+
+  # Detect named tables
+  named_tables <- NULL
+  if (include_named_tables) {
+    named_tables <- tryCatch(
+      detect_named_tables(file_path, sheet_names),
+      error = function(e) NULL
+    )
+    if (!is.null(named_tables) && nrow(named_tables) == 0) named_tables <- NULL
+  }
 
   # --- Step 3: Transform formulas ---
   update_progress(3, "Transforming formulas to R code...")
@@ -119,16 +130,19 @@ process_excel_file <- function(file_path,
     exec_order = exec_order,
     used_functions = used_functions,
     wrap_trycatch = wrap_trycatch,
-    include_comments = include_comments
+    include_comments = include_comments,
+    named_tables = named_tables
   )
 
-  list(script = script, report = report, warnings = unique(all_warnings))
+  list(script = script, report = report, warnings = unique(all_warnings),
+       named_tables = named_tables)
 }
 
 
 #' Generate the self-contained R script
 generate_r_script <- function(excel_path, formula_data, sheet_names, sheet_dims,
-                               exec_order, used_functions, wrap_trycatch, include_comments) {
+                               exec_order, used_functions, wrap_trycatch, include_comments,
+                               named_tables = NULL) {
   L <- character(0)  # lines accumulator
   add <- function(...) L <<- c(L, paste0(...))
   blank <- function() L <<- c(L, "")
@@ -486,6 +500,30 @@ generate_r_script <- function(excel_path, formula_data, sheet_names, sheet_dims,
     blank()
   }
 
+  # === SECTION 5.5: Named Tables ===
+  if (!is.null(named_tables) && nrow(named_tables) > 0) {
+    add("# ============================================================")
+    add("# Named Tables")
+    add("# ============================================================")
+    blank()
+
+    for (i in seq_len(nrow(named_tables))) {
+      tbl <- named_tables[i, ]
+      s_sanitized <- sanitize_sheet_name(tbl$sheet)
+      tbl_name <- sanitize_sheet_name(tbl$table_name)
+      col_start_idx <- col_letter_to_index(tbl$col_start)
+      col_end_idx <- col_letter_to_index(tbl$col_end)
+      col_names <- tbl$col_names[[1]]
+
+      add("# Table \"", tbl$table_name, "\" on sheet \"", tbl$sheet, "\" (", tbl$ref, ")")
+      add(tbl_name, " <- ", s_sanitized, "[", tbl$data_start_row, ":", tbl$data_end_row,
+          ", ", col_start_idx, ":", col_end_idx, "]")
+      col_names_str <- paste0('"', col_names, '"', collapse = ", ")
+      add("colnames(", tbl_name, ") <- c(", col_names_str, ")")
+      blank()
+    }
+  }
+
   # === SECTION 6: Apply Formulas ===
   add("# ============================================================")
   add("# Apply Formulas (dependency-ordered)")
@@ -537,6 +575,15 @@ generate_r_script <- function(excel_path, formula_data, sheet_names, sheet_dims,
   for (s in exec_order$sheet_order) {
     s_sanitized <- sanitize_sheet_name(s)
     add('cat(sprintf("  ', s_sanitized, ': %d rows x %d cols\\n", nrow(', s_sanitized, '), ncol(', s_sanitized, ')))')
+  }
+
+  if (!is.null(named_tables) && nrow(named_tables) > 0) {
+    blank()
+    add('cat("\\nNamed tables:\\n")')
+    for (i in seq_len(nrow(named_tables))) {
+      tbl_name <- sanitize_sheet_name(named_tables$table_name[i])
+      add('cat(sprintf("  ', tbl_name, ': %d rows x %d cols\\n", nrow(', tbl_name, '), ncol(', tbl_name, ')))')
+    }
   }
 
   paste(L, collapse = "\n")

@@ -68,7 +68,10 @@ ui <- page_navbar(
           ),
           hr(),
           h6("Functions Detected:"),
-          htmlOutput("detected_functions")
+          htmlOutput("detected_functions"),
+          hr(),
+          h6("Named Tables:"),
+          htmlOutput("detected_tables")
         )
       )
     )
@@ -102,6 +105,7 @@ ui <- page_navbar(
         card_header("Output Options"),
         checkboxInput("opt_trycatch", "Wrap each formula in tryCatch() for error safety", value = TRUE),
         checkboxInput("opt_comments", "Include original Excel formulas as comments", value = TRUE),
+        checkboxInput("opt_named_tables", "Generate named table data frames with real column headers", value = TRUE),
         textInput("opt_filepath", "Excel file path in generated script:",
                   value = "", placeholder = "e.g., data/my_workbook.xlsx")
       ),
@@ -236,6 +240,24 @@ server <- function(input, output, session) {
     )
   })
 
+  output$detected_tables <- renderUI({
+    req(rv$results)
+    tables <- rv$results$named_tables
+    if (is.null(tables) || nrow(tables) == 0) {
+      return(tags$em("No named tables detected"))
+    }
+    tags$div(
+      lapply(seq_len(nrow(tables)), function(i) {
+        t <- tables[i, ]
+        n_rows <- t$data_end_row - t$data_start_row + 1
+        tags$span(
+          class = "badge bg-info me-1 mb-1",
+          sprintf("%s (%s, %d rows)", t$table_name, t$sheet, n_rows)
+        )
+      })
+    )
+  })
+
   # --- Review Table ---
   output$formula_table <- renderDT({
     req(rv$results)
@@ -309,6 +331,14 @@ server <- function(input, output, session) {
       report[, c("Sheet", "Cell", "Row", "Col", "Formula")]
     )
 
+    # Named tables: filter to selected sheets if enabled
+    named_tables <- NULL
+    if (isTRUE(input$opt_named_tables) && !is.null(rv$results$named_tables)) {
+      named_tables <- rv$results$named_tables
+      named_tables <- named_tables[named_tables$sheet %in% all_sheets, , drop = FALSE]
+      if (nrow(named_tables) == 0) named_tables <- NULL
+    }
+
     script <- generate_r_script(
       excel_path = excel_path,
       formula_data = report,
@@ -317,7 +347,8 @@ server <- function(input, output, session) {
       exec_order = exec_order,
       used_functions = used_functions,
       wrap_trycatch = input$opt_trycatch,
-      include_comments = input$opt_comments
+      include_comments = input$opt_comments,
+      named_tables = named_tables
     )
 
     list(script = script, report = report, warnings = rv$results$warnings)
